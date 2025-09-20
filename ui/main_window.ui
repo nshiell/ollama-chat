@@ -28,7 +28,7 @@
            <x>0</x>
            <y>0</y>
            <width>782</width>
-           <height>487</height>
+           <height>510</height>
           </rect>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -46,7 +46,7 @@
            </spacer>
           </item>
           <item>
-           <layout class="QVBoxLayout" name="verticalLayout_4">
+           <layout class="QVBoxLayout" name="vertical_layout_conversation">
             <item>
              <widget class="QFrame" name="frame_assistant">
               <property name="frameShape">
@@ -88,6 +88,9 @@ padding: 10px</string>
                         </property>
                         <property name="wordWrap">
                          <bool>true</bool>
+                        </property>
+                        <property name="textInteractionFlags">
+                         <set>Qt::LinksAccessibleByKeyboard|Qt::LinksAccessibleByMouse|Qt::TextBrowserInteraction|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
                         </property>
                        </widget>
                       </item>
@@ -169,6 +172,9 @@ padding: 10px</string>
                         <property name="wordWrap">
                          <bool>true</bool>
                         </property>
+                        <property name="textInteractionFlags">
+                         <set>Qt::LinksAccessibleByKeyboard|Qt::LinksAccessibleByMouse|Qt::TextBrowserInteraction|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                        </property>
                        </widget>
                       </item>
                      </layout>
@@ -192,7 +198,7 @@ padding: 10px</string>
         <item>
          <widget class="QLineEdit" name="message">
           <property name="placeholderText">
-           <string>Ask me</string>
+           <string>Ask me...</string>
           </property>
          </widget>
         </item>
@@ -202,6 +208,9 @@ padding: 10px</string>
            <string>&amp;Send</string>
           </property>
          </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="combo_models"/>
         </item>
        </layout>
       </item>
@@ -218,8 +227,68 @@ padding: 10px</string>
      <height>30</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuChat">
+    <property name="title">
+     <string>Chat</string>
+    </property>
+    <addaction name="actionSettings"/>
+    <addaction name="action_configure"/>
+    <addaction name="separator"/>
+    <addaction name="actionQuit"/>
+   </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionContents"/>
+    <addaction name="actionAbout_Ollama_Chat"/>
+   </widget>
+   <addaction name="menuChat"/>
+   <addaction name="menuHelp"/>
   </widget>
-  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionSettings">
+   <property name="icon">
+    <iconset theme="window-new"/>
+   </property>
+   <property name="text">
+    <string>New Window</string>
+   </property>
+  </action>
+  <action name="action_configure">
+   <property name="icon">
+    <iconset theme="settings-configure"/>
+   </property>
+   <property name="text">
+    <string>&amp;Configure</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+G</string>
+   </property>
+  </action>
+  <action name="actionContents">
+   <property name="icon">
+    <iconset theme="question"/>
+   </property>
+   <property name="text">
+    <string>Contents</string>
+   </property>
+  </action>
+  <action name="actionAbout_Ollama_Chat">
+   <property name="icon">
+    <iconset theme="help-about"/>
+   </property>
+   <property name="text">
+    <string>About Ollama Chat</string>
+   </property>
+  </action>
+  <action name="actionQuit">
+   <property name="icon">
+    <iconset theme="window-close"/>
+   </property>
+   <property name="text">
+    <string>Quit</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>
