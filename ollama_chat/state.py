@@ -15,16 +15,95 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+import json
+from appdirs import *
+from os import path
+
+dirs = AppDirs('ollama-chat', 'nshiell')
+user_config_file_path = os.path.join(dirs.user_config_dir, 'config.json')
+
+
+class Bindings:
+    def __init__(self, names):
+        self.events = d = dict.fromkeys(names, [])
+
+
+    def __call__(self, name, function):
+        if name not in self.events:
+            raise ValueError('Name "%s" not registered' % name)
+
+        self.events[name].append(function)
+
+
+    def trigger(self, name):
+        if name not in self.events:
+            raise ValueError('Name "%s" not registered' % name)
+
+        for function in self.events[name]:
+            function()
+
 
 class State:
-    def __init__(self, default_model=None, colour_scheme=None):
-    #    self.default_model = default_model
-    #    self.colour_scheme = colour_scheme
+    attributes = ['model_name', 'style', 'context', 'url', 'font', 'font_size']
 
-    #def load(self):
-        self.default_model = 'mistral-nemo:latest'
+    def __init__(self, default_model=None, colour_scheme=None):
+        self.model_name = 'mistral-nemo:latest'
         self.style = 'Blue'
         self.context = 'You are being used for the programmer in building the application'
         self.url = 'http://127.0.0.1:11434'
         self.font = 'Ubuntu'
         self.font_size = 12
+        self.bind = Bindings(['changed'])
+
+        load_state(self)
+
+
+    def update(self, values):
+        for att in self.attributes:
+            setattr(self, att, values[att] if att in values else self[att])
+
+        save_state(self)
+        self.bind.trigger('changed')
+
+
+    def to_dict(self):
+        return {
+            'model_name'    : self.model_name,
+            'style'         : self.style,
+            'context'       : self.context,
+            'url'           : self.url,
+            'font'          : self.font,
+            'font_size'     : self.font_size
+        }
+
+
+def make_config_dir_if_not_exists():
+    if not os.path.exists(dirs.user_config_dir):
+        os.makedirs(dirs.user_config_dir)
+
+
+def set_config(data):
+    make_config_dir_if_not_exists()
+    json_data = json.dumps(data, indent=4, sort_keys=True)
+    open(user_config_file_path, "w").write(json_data)
+
+
+def load_state(state):
+    config = get_config()
+    if config:
+        for att in state.attributes:
+            try:
+                setattr(state, att, config[att] if att in config else state[att])
+            except Exception:
+                pass
+
+
+def save_state(state):
+    set_config(state.to_dict())
+
+
+def get_config():
+    if path.exists(user_config_file_path):
+        return json.loads(open(user_config_file_path, "r").read())
+
+    return None

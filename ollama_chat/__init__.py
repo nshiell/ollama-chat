@@ -20,22 +20,88 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from .window_mixin import WindowMixin
-from ollama import chat, list as ai_list
+#from ollama import chat, list as ai_list, Client
+import ollama
 import getpass, locale, platform, os
 from datetime import datetime
 from .state import State
 from .style import styles
 
 
-def ai_models():
-    class FakeModel:
-        def __init__(self, model):
-            self.model = model
+class ModelNames:
+    def __init__(self, client, load=False):
+        #self._client = client
+        self.client = client
+        self.models = None
+        self.loaded = False
+        self.last_exception = None
+        #self.bind = Bindings()
 
-    try:
-        return ai_list().models
-    except ConnectionError:
-        return [FakeModel('Unable to connect')]
+        if load:
+            self.load()
+
+
+    def __getattr__(self, method):
+        self.load()
+        if self.models is None:
+            return None
+        return getattr(self.models, method)
+
+
+    def __len__(self):
+        self.load()
+        if self.models is None:
+            return 0
+        return len(self.models)
+
+
+    def __iter__(self):
+        self.load()
+        if self.models is None:
+            return iter([])
+        return iter(self.models)
+
+
+    def __getitem__(self, item):
+        self.load()
+        if self.models is None:
+            return None
+        return self.models[item]
+
+
+    #@property
+    #def client(self):
+    #    return self._client
+
+    #@client.setter
+    #def client(self, client):
+    #    self._client = client
+
+
+    def load(self):
+        if not self.loaded:
+            if self.client is None:
+                self.last_exception = 'No client'
+                self.loaded = True
+                self.models = None
+                return
+
+            self.last_exception = None
+            try:
+                self.models = [m.model for m in self.client.list().models]
+            except Exception as e:
+                self.models = None
+                self.loaded = True
+                self.last_exception = e
+                return
+
+        self.loaded = True
+        self.last_exception = None
+
+
+    def reload(self):
+        self.loaded = False
+        self.load()
 
 
 class Conversation:
@@ -44,12 +110,14 @@ class Conversation:
             messages=[],
             assistant_typing=False,
             bind={},
-            model_name=None
+            model_name=None,
+            client=None
         ):
         self.messages = messages
         self.assistant_typing_ = assistant_typing
         self.bind = bind
         self.model_name = model_name
+        self.client = client
 
 
     def __getattr__(self, method):
@@ -116,10 +184,11 @@ class QueryThread(QThread):
     typing = pyqtSignal(bool)
 
 
-    def __init__(self, messages, model_name=None):
+    def __init__(self, messages, client=None, model_name=None):
         super().__init__()
         self.messages = messages
         self.model_name = model_name
+        self.client = client
 
 
     def run(self):
@@ -135,23 +204,23 @@ class QueryThread(QThread):
         ]
 
         query = {
-            'model': 'mistral-nemo',
+            'model': self.model_name,
             'messages': messages_context + self.messages,
             'stream': True
         }
 
-        for part in chat(**query):
+        for part in self.client.chat(**query):
             self.word.emit(part['message']['content'])
 
         self.typing.emit(False)
 
 
-def ask(q_input, thread, conversation, model_name):
-    print(model_name)
+def ask(q_input, thread, conversation, combo_models):
     if conversation.assistant_typing:
         return None
 
     conversation.ai_responding = True
+    conversation.model_name = combo_models.currentText()
 
     message = q_input.text().strip()
     if not message:
@@ -162,6 +231,7 @@ def ask(q_input, thread, conversation, model_name):
 
     # is this good?
     thread.model_name = conversation.model_name
+    thread.client = conversation.client
     thread.start()
 
 
@@ -196,22 +266,28 @@ class MainWindow(QMainWindow, WindowMixin):
         self.current_bubble_text = None
         self.scroll_at_bottom = True  # Assume initially at bottom
 
+        try:
+            client = ollama.Client(self.state.url)
+        except Exception:
+            client = None
+
+        self.models = ModelNames(client, True)
+        self.conversation.client = self.models.client
+
         super().__init__()
         self.load_xml('main_window.ui')
 
         self.setup_thread()
-        self.setup_data_state()
+        self.swap_widgets()
         self.setup_remove_template_widgets()
+        self.settings_dialog = SettingsDialog(self.state)
 
         self.message.setFocus()
         self.bind()
 
 
-    def setup_data_state(self):
-        for i, model in enumerate(ai_models()):
-            self.combo_models.insertItem(i, model.model)
-            if model.model == self.conversation.model_name:
-                self.combo_models.setCurrentIndex(i)
+    def swap_widgets(self):
+        self.swap_widget(self.combo_models, QComboBoxModels(self.models))
 
 
     def word_add(self, word):
@@ -230,6 +306,8 @@ class MainWindow(QMainWindow, WindowMixin):
 
 
     def bind(self):
+        self.state.bind('changed', self.state_change)
+
         self.conversation.bind = {
             'add_word': [self.word_add],
             'assistant_typing': [self.assistant_typing_toggled],
@@ -248,25 +326,31 @@ class MainWindow(QMainWindow, WindowMixin):
             self.message,
             self.queryThread,
             self.conversation,
-            'mistral-nemo'#self.combo_models.currentItem().text()
+            self.combo_models
         ))
 
         self.send.clicked.connect(lambda: ask(
             self.message,
             self.queryThread,
             self.conversation,
-            'mistral-nemo'#self.combo_models.currentItem().text()
+            self.combo_models
         ))
 
         self.menu('action_configure', self.settings_dialog.show)
 
 
-    @property
-    def settings_dialog(self):
-        if not hasattr(self, 'settings_dialog_'):
-            self.settings_dialog_ = SettingsDialog(self.state)
+    def state_change(self):
+        self.models.client = self.create_client(self.state.url)
+        self.conversation.client = self.models.client
+        self.models.reload()
+        self.combo_models.redraw()
 
-        return self.settings_dialog_
+
+    def create_client(self, url):
+        try:
+            return ollama.Client(url)
+        except Exception:
+            return None
 
 
     def assistant_typing_toggled(self, value):
@@ -304,20 +388,50 @@ class MainWindow(QMainWindow, WindowMixin):
             self.scrollArea.verticalScrollBar().setValue(maximum)
 
 
+class QComboBoxModels(QComboBox):
+    unable_to_connect_text = 'Unable to connect!'
+
+    def __init__(self, models):
+        self.models = models
+        super().__init__()
+
+        self.redraw(False)
+
+        #models.bind('udpated', self.redraw)
+
+    def redraw(self, clear=True):
+        if clear:
+            self.clear()
+
+        if self.models.last_exception:
+            self.addItems([self.unable_to_connect_text])
+            self.setEnabled(False)
+        else:
+            self.addItems(self.models)
+            self.setEnabled(True)
+
+
 class SettingsDialog(QDialog, WindowMixin):
     def __init__(self, state):
         super().__init__()
         self.load_xml('settings.ui')
         self.state = state
+
+        self.models = ModelNames(self.create_client(self.state.url), True)
         self.bind()
+        #self.models.bind('client_change', lambda: print('sdfg'))
+
+
+    def create_client(self, url):
+        try:
+            return ollama.Client(url)
+        except Exception:
+            return None
 
 
     def setup_data_state(self):
         self.tabs.setCurrentIndex(0)
-        for i, model in enumerate(ai_models()):
-            self.combo_models.insertItem(i, model.model)
-            if model.model == self.state.default_model:
-                self.combo_models.setCurrentIndex(i)
+        self.swap_widget(self.combo_models, QComboBoxModels(self.models))
 
         self.plain_text_context.setPlainText(self.state.context)
         self.line_edit_url.setText(self.state.url)
@@ -329,13 +443,11 @@ class SettingsDialog(QDialog, WindowMixin):
 
         self.combo_font.setCurrentFont(QFont(self.state.font))
         self.spin_box_font_size.setValue(self.state.font_size)
-        #self.button_connect.connect()
-
-
         self.label_connected.setText('Connected')
 
 
     def bind(self):
+        self.button_connect.clicked.connect(self.connect)
         self.button_box.accepted.connect(self.ok)
         self.button_box.rejected.connect(self.hide)
 
@@ -345,11 +457,20 @@ class SettingsDialog(QDialog, WindowMixin):
         super().show()
 
 
+    def connect(self):
+        self.models.client = self.create_client(self.line_edit_url.text())
+        self.models.reload()
+        #enable = self.models.client is None
+        self.combo_models.redraw()
+
+
     def ok(self):
-        self.state.default_model = self.combo_models.currentText()
-        self.state.context = self.plain_text_context.toPlainText()
-        self.state.url = self.line_edit_url.text()
-        self.state.style = self.combo_styles.currentText()
-        self.state.font = self.combo_font.currentFont().family()
-        self.state.font_size = self.spin_box_font_size.value()
+        self.state.update({
+            'model_name'    : self.combo_models.currentText(),
+            'context'       : self.plain_text_context.toPlainText(),
+            'url'           : self.line_edit_url.text(),
+            'style'         : self.combo_styles.currentText(),
+            'font'          : self.combo_font.currentFont().family(),
+            'font_size'     : self.spin_box_font_size.value()
+        })
         self.hide()

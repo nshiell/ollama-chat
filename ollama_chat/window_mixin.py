@@ -1,6 +1,6 @@
 """
     Database Dossier - A User Interface for your databases
-    Copyright (C) 2023  Nicholas Shiell
+    Copyright (C) 2025  Nicholas Shiell
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -24,6 +24,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from xml.etree import ElementTree as ET
 
+from pprint import pprint
+
 def load_web_engine_if_needed():
     try:
         from PyQt5.QtWebKitWidgets import QWebView
@@ -39,6 +41,7 @@ class WindowMixin:
         self._artwork_dir = None
         self._extra_ui = None
         self.extra_ui_file_name = None
+        self._xml_children_parent = None
 
 
     def f(self, name):
@@ -58,7 +61,7 @@ class WindowMixin:
                 widget = self.f(name_or_widget)
             if widget == None:
                 return None
-        
+
         event = getattr(widget, eventName)
         return event.connect(callback)
 
@@ -110,6 +113,24 @@ class WindowMixin:
             uic.loadUi(self.xml_file, self)
 
 
+
+    @property
+    def xml_children_parent(self):
+        if self._xml_children_parent == None:
+            self._xml_children_parent = {}
+            def add_parents_recursive(parent):
+                for child in parent:
+                    self._xml_children_parent[child] = parent
+                    add_parents_recursive(child)
+
+
+            xml_root = self.xml_root.getroot()
+            self._xml_children_parent[xml_root] = None
+            add_parents_recursive(xml_root)
+
+        return self._xml_children_parent
+
+
     @property
     def xml_root(self):
         if not self.xml_root_:
@@ -129,7 +150,7 @@ class WindowMixin:
         # Not found in the XML DOM?
         if item == None:
             return None
-    
+
         # Get the DOM fragment for the original node as an XML string
         xml_for_clone = str(
             ET.tostring(item, encoding='utf8', method='xml')
@@ -148,8 +169,37 @@ class WindowMixin:
         # new_widget will have the temport XML loaded into it
         # as if new_widget was a window
         uic.loadUi(io.StringIO(wrapped_in_ui_tag), new_widget)
-    
+
         return new_widget
+
+
+    def get_widget_parent_layout_from_ui(self, widget):
+        name = widget.objectName()
+        item = self.xml_root.find('.//*[@name="%s"]' % name)
+
+        layout = self.xml_children_parent[item]
+
+        while layout.tag != 'layout':
+            layout = self.xml_children_parent[layout]
+
+        if 'name' not in layout.attrib:
+            return None
+
+        layout_name = layout.attrib['name']
+        print(layout_name)
+        return self.findChild(QLayout, layout.attrib['name'])
+
+
+    def swap_widget(self, original, new):
+        original.parentWidget().layout().replaceWidget(original, new)
+        widget_name = original.objectName()
+        #layout = self.get_widget_parent_layout_from_ui(original)
+        #index = layout.indexOf(original)
+
+        #layout.insertWidget(index, new)
+        original.deleteLater()
+        new.setObjectName(widget_name)
+        setattr(self, widget_name, new)
 
 
     @property
