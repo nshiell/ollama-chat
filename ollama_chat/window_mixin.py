@@ -22,6 +22,7 @@ from pathlib import Path
 from PyQt5 import uic
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
+from PyQt5.QtCore import QObject
 from xml.etree import ElementTree as ET
 
 from pprint import pprint
@@ -42,6 +43,7 @@ class WindowMixin:
         self._extra_ui = None
         self.extra_ui_file_name = None
         self._xml_children_parent = None
+        self.w = {}
 
 
     def f(self, name):
@@ -144,7 +146,10 @@ class WindowMixin:
             References the original XML file
             that was used to build the UI for source """
 
-        name = original.objectName()
+        if isinstance(original, str):
+            name = original
+        else:
+            name = original.objectName()
         item = self.xml_root.find('.//widget[@name="%s"]' % name)
 
         # Not found in the XML DOM?
@@ -190,6 +195,14 @@ class WindowMixin:
         return self.findChild(QLayout, layout.attrib['name'])
 
 
+    def swap_widget_deep_clone(self, original, new):
+        self.clone_widget_into(original, new)
+        self.swap_widget(original, new)
+        self.force_wigdet_items(new)
+
+        return new
+
+
     def swap_widget(self, original, new):
         original.parentWidget().layout().replaceWidget(original, new)
         widget_name = original.objectName()
@@ -200,6 +213,15 @@ class WindowMixin:
         original.deleteLater()
         new.setObjectName(widget_name)
         setattr(self, widget_name, new)
+
+
+    def force_wigdet_items(self, obj):
+        for child in obj.findChildren(QObject):
+            name = child.objectName()
+            if name:
+                self.w[name] = child
+                #setattr(self, name, child)
+
 
 
     @property

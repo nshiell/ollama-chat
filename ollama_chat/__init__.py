@@ -26,7 +26,7 @@ import getpass, locale, platform, os
 from datetime import datetime
 from .state import State
 from .style import styles
-
+from .conversation import Conversation
 
 class ModelNames:
     def __init__(self, client, load=False):
@@ -104,81 +104,6 @@ class ModelNames:
         self.load()
 
 
-class Conversation:
-    def __init__(
-            self,
-            messages=[],
-            assistant_typing=False,
-            bind={},
-            model_name=None,
-            client=None
-        ):
-        self.messages = messages
-        self.assistant_typing_ = assistant_typing
-        self.bind = bind
-        self.model_name = model_name
-        self.client = client
-
-
-    def __getattr__(self, method):
-        return getattr(self.messages, method)
-
-
-    def __len__(self):
-        return len(self.messages)
-
-
-    def __getitem__(self, item):
-        return self.messages[item]
-
-
-    def add_word(self, word):
-        if not self.messages or self.messages[-1]['role'] == 'assistant':
-            self.add_assistant_message()
-
-        self.messages[-1]['content']+= word
-        if 'add_word' in self.bind:
-            [cmd(word) for cmd in self.bind['add_word']]
-
-
-    @property
-    def assistant_typing(self):
-        return self.assistant_typing_
-
-
-    @assistant_typing.setter
-    def assistant_typing(self, value):
-        self.assistant_typing_ = value
-        if 'assistant_typing' in self.bind:
-            [cmd(value) for cmd in self.bind['assistant_typing']]
-
-
-    def set_assistant_typing(self, value):
-        self.assistant_typing = value
-
-
-    def add_user_message(self, content):
-        if self.assistant_typing:
-            raise RuntimeError(
-                'Unable to add a message while the assistant is typing'
-            )
-
-        self.messages.append({
-            'role': 'user',
-            'content': content
-        })
-
-        if 'add_user_message' in self.bind:
-            [cmd(content) for cmd in self.bind['add_user_message']]
-
-
-    def add_assistant_message(self, content=''):
-        self.messages.append({
-            'role': 'assistant',
-            'content': content
-        })
-
-
 class QueryThread(QThread):
     word = pyqtSignal(str)
     typing = pyqtSignal(bool)
@@ -235,6 +160,30 @@ def ask(q_input, thread, conversation, combo_models):
     thread.start()
 
 
+class QScrollAreaChat(QScrollArea):
+    def __init__(self):
+        super().__init__()
+
+        self.at_bottom = True  # Assume initially at bottom
+        self.bind()
+
+
+    def bind(self):
+        vscroll = self.verticalScrollBar()
+        vscroll.rangeChanged.connect(self.scroll_to_bottom_if_needed)
+        vscroll.valueChanged.connect(self.store_at_bottom_state)
+
+
+    def store_at_bottom_state(self, value):
+        min_snap = self.verticalScrollBar().maximum() - 10
+        self.at_bottom = value >= min_snap
+
+
+    def scroll_to_bottom_if_needed(self, minimum, maximum):
+        if self.at_bottom:
+            self.verticalScrollBar().setValue(maximum)
+
+
 class MainWindow(QMainWindow, WindowMixin):
     def __init__(self):
         self.conversation = Conversation([
@@ -264,7 +213,6 @@ class MainWindow(QMainWindow, WindowMixin):
         self.conversation.model_name = 'mistral-nemo:latest'
 
         self.current_bubble_text = None
-        self.scroll_at_bottom = True  # Assume initially at bottom
 
         try:
             client = ollama.Client(self.state.url)
@@ -278,6 +226,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.load_xml('main_window.ui')
 
         self.setup_thread()
+
         self.swap_widgets()
         self.setup_remove_template_widgets()
         self.settings_dialog = SettingsDialog(self.state)
@@ -288,6 +237,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def swap_widgets(self):
         self.swap_widget(self.combo_models, QComboBoxModels(self.models))
+        self.swap_widget_deep_clone(self.scrollArea, QScrollAreaChat())
 
 
     def word_add(self, word):
@@ -300,9 +250,9 @@ class MainWindow(QMainWindow, WindowMixin):
         self.queryThread.typing.connect(self.conversation.set_assistant_typing)
 
 
-    def setup_remove_template_widgets(self, ):
-        self.frame_assistant.setParent(None)
-        self.frame_user.setParent(None)
+    def setup_remove_template_widgets(self):
+        self.w['frame_assistant'].setParent(None)
+        self.w['frame_user'].setParent(None)
 
 
     def bind(self):
@@ -313,14 +263,6 @@ class MainWindow(QMainWindow, WindowMixin):
             'assistant_typing': [self.assistant_typing_toggled],
             'add_user_message': [self.add_user_bubble],
         }
-
-        self.scrollArea.verticalScrollBar().rangeChanged.connect(
-            self.scroll_to_bottom_if_needed
-        )
-
-        self.scrollArea.verticalScrollBar().valueChanged.connect(
-            self.store_at_bottom_state
-        )
 
         self.message.returnPressed.connect(lambda: ask(
             self.message,
@@ -359,33 +301,24 @@ class MainWindow(QMainWindow, WindowMixin):
 
 
     def add_assistant_bubble(self, title, message=None):
-        frame = self.clone_widget_into(self.frame_assistant, QFrame())
+        frame = self.clone_widget_into('frame_assistant', QFrame())
         frame.findChild(QLabel, 'author_assistant').setText(title)
 
         self.current_bubble_text = frame.findChild(QLabel, 'assistant_text')
         self.current_bubble_text.setText(message if message else '')
 
-        self.vertical_layout_conversation.addWidget(frame)
+        self.w['vertical_layout_conversation'].addWidget(frame)
         return frame
 
 
     def add_user_bubble(self, message):
-        frame = self.clone_widget_into(self.frame_user, QFrame())
+        frame = self.clone_widget_into('frame_user', QFrame())
 
         frame.findChild(QLabel, 'author_user').setText(getpass.getuser())
         frame.findChild(QLabel, 'user_text').setText(message)
-        self.vertical_layout_conversation.addWidget(frame)
+
+        self.w['vertical_layout_conversation'].addWidget(frame)
         return frame
-
-
-    def store_at_bottom_state(self, value):
-        min_snap = self.scrollArea.verticalScrollBar().maximum() - 10
-        self.scroll_at_bottom = value >= min_snap
-
-
-    def scroll_to_bottom_if_needed(self, minimum, maximum):
-        if self.scroll_at_bottom:
-            self.scrollArea.verticalScrollBar().setValue(maximum)
 
 
 class QComboBoxModels(QComboBox):
