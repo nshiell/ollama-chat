@@ -15,13 +15,18 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-import json
+import json, re
 from appdirs import *
 from os import path
+from os.path import join
+from .conversation import Conversation
+import glob
+
 
 dirs = AppDirs('ollama-chat', 'nshiell')
-user_config_file_path = os.path.join(dirs.user_config_dir, 'config.json')
+user_config_file_path = join(dirs.user_config_dir, 'config.json')
 
+from pprint import pprint
 
 class Bindings:
     def __init__(self, names):
@@ -43,18 +48,62 @@ class Bindings:
             function()
 
 
-class State:
-    attributes = ['model_name', 'style', 'context', 'url', 'font', 'font_size']
+class Settings:
+    def __init__(self, **kwargs):
+        self.items = {
+            'model_name' : kwargs['model_name'],
+            'style'      : kwargs['style'],
+            'context'    : kwargs['context'],
+            'url'        : kwargs['url'],
+            'font'       : kwargs['font'],
+            'font_size'  : kwargs['font_size']
+        }
 
-    def __init__(self, default_model=None, colour_scheme=None):
-        self.model_name = 'mistral-nemo:latest'
-        self.style = 'Blue'
-        self.context = 'You are being used for the programmer in building the application'
-        self.url = 'http://127.0.0.1:11434'
-        self.font = 'Ubuntu'
-        self.font_size = 12
         self.bind = Bindings(['changed'])
 
+
+    def __setitem__(self, key, item):
+        if key in self.items:
+            self.items[key] = item
+        else:
+            raise KeyError('Key: "%s" not in settings' % key)
+
+    def __getitem__(self, key):
+        return self.items[key]
+
+
+    def update(self, *args, **kwargs):
+        for value in args:
+            for key, item in value.items():
+                try:
+                    self.__setitem__(key, item)
+                except KeyError:
+                    pass
+
+        for key, value in kwargs.items():
+            try:
+                self.__setitem__(key, item)
+            except KeyError:
+                pass
+
+        self.bind.trigger('changed')
+
+    def __iter__(self):
+        for key in self.items:
+            yield key, self.items[key]
+
+
+class State:
+    def __init__(self, default_model=None, colour_scheme=None):
+        self.settings = Settings(
+            model_name='mistral-nemo:latest',
+            style='Blue',
+            context='You are being used for the programmer in building the application',
+            url='http://127.0.0.1:11434',
+            font='Ubuntu',
+            font_size=12
+        )
+        self.conversations = []
         load_state(self)
 
 
@@ -62,19 +111,17 @@ class State:
         for att in self.attributes:
             setattr(self, att, values[att] if att in values else self[att])
 
-        save_state(self)
         self.bind.trigger('changed')
 
 
-    def to_dict(self):
-        return {
-            'model_name'    : self.model_name,
-            'style'         : self.style,
-            'context'       : self.context,
-            'url'           : self.url,
-            'font'          : self.font,
-            'font_size'     : self.font_size
-        }
+    def __iter__(self):
+        for key in self.items:
+            yield key, getattr(self, key)
+
+
+    def save(self):
+        save_state(self)
+
 
 
 def make_config_dir_if_not_exists():
@@ -82,24 +129,41 @@ def make_config_dir_if_not_exists():
         os.makedirs(dirs.user_config_dir)
 
 
-def set_config(data):
+def set_config(path, data):
     make_config_dir_if_not_exists()
-    json_data = json.dumps(data, indent=4, sort_keys=True)
-    open(user_config_file_path, "w").write(json_data)
+    json_data = json.dumps(dict(data), indent=4, sort_keys=True)
+    open(path, "w").write(json_data)
 
 
 def load_state(state):
     config = get_config()
-    if config:
-        for att in state.attributes:
-            try:
-                setattr(state, att, config[att] if att in config else state[att])
-            except Exception:
-                pass
+    if isinstance(config, dict):
+        state.settings.update(config)
+
+
+    glob_path = glob.glob(join(dirs.user_config_dir, '*.conversation.json'))
+    for con_path in glob_path:
+        try:
+            match = re.search(r'^.*/(.*)\.conversation\.json$', con_path)
+            name = match.group(1)
+            con_data = json.load(open(con_path, 'r'))
+            con_data['name'] = name
+            state.conversations.append(Conversation(**con_data))
+
+        except Exception as e:
+            print(e)
+            continue
+        #data = json.load(open(conversation_path, 'r'))
+        #print(txt_files)
 
 
 def save_state(state):
-    set_config(state.to_dict())
+    set_config(user_config_file_path, state.settings)
+    for con in state.conversations:
+        if con.messages:
+            path = join(dirs.user_config_dir, con.name + '.conversation.json')
+            set_config(path, con)
+    #user_config_file_path = os.path.join(dirs.user_config_dir, 'config.json')
 
 
 def get_config():

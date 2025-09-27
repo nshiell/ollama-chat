@@ -59,11 +59,21 @@
                <item>
                 <layout class="QHBoxLayout" name="assistant_box_21">
                  <item>
-                  <widget class="QFrame" name="frame_41">
+                  <widget class="QFrame" name="frame_assistant_bubble">
                    <property name="styleSheet">
-                    <string notr="true">background-color: red;
-border-radius: 10px;
-padding: 10px</string>
+                    <string notr="true">#frame_assistant_bubble {
+background: qlineargradient(
+    spread:pad,
+    x1:0, y1:1,
+    x2:0, y2:0,
+    stop:0.95 #5577AA,
+    stop:0.8 #2244AA,
+    stop:0.2 #111199,
+    stop:0 #000044
+);
+border-radius: 20px;
+padding: 10px;
+}</string>
                    </property>
                    <property name="frameShape">
                     <enum>QFrame::StyledPanel</enum>
@@ -91,6 +101,13 @@ padding: 10px</string>
                         </property>
                         <property name="textInteractionFlags">
                          <set>Qt::LinksAccessibleByKeyboard|Qt::LinksAccessibleByMouse|Qt::TextBrowserInteraction|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <widget class="QPushButton" name="btn_stop">
+                        <property name="text">
+                         <string>Stop!</string>
                         </property>
                        </widget>
                       </item>
@@ -142,11 +159,21 @@ padding: 10px</string>
                   </spacer>
                  </item>
                  <item>
-                  <widget class="QFrame" name="frame_4">
+                  <widget class="QFrame" name="frame_user_bubble">
                    <property name="styleSheet">
-                    <string notr="true">background-color: red;
-border-radius: 10px;
-padding: 10px</string>
+                    <string notr="true">#frame_user_bubble {
+background: qlineargradient(
+    spread:pad,
+    x1:0, y1:1,
+    x2:0, y2:0,
+    stop:0.95 #335544,
+    stop:0.8 #224433,
+    stop:0.2 #113322,
+    stop:0 #002200
+);
+border-radius: 20px;
+padding: 10px;
+}</string>
                    </property>
                    <property name="frameShape">
                     <enum>QFrame::StyledPanel</enum>
@@ -231,10 +258,10 @@ padding: 10px</string>
     <property name="title">
      <string>Chat</string>
     </property>
-    <addaction name="actionSettings"/>
+    <addaction name="action_new_window"/>
     <addaction name="action_configure"/>
     <addaction name="separator"/>
-    <addaction name="actionQuit"/>
+    <addaction name="action_quit"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -246,9 +273,10 @@ padding: 10px</string>
    <addaction name="menuChat"/>
    <addaction name="menuHelp"/>
   </widget>
-  <action name="actionSettings">
+  <action name="action_new_window">
    <property name="icon">
-    <iconset theme="window-new"/>
+    <iconset theme="window-new">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>New Window</string>
@@ -256,7 +284,8 @@ padding: 10px</string>
   </action>
   <action name="action_configure">
    <property name="icon">
-    <iconset theme="settings-configure"/>
+    <iconset theme="settings-configure">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>&amp;Configure</string>
@@ -267,7 +296,8 @@ padding: 10px</string>
   </action>
   <action name="actionContents">
    <property name="icon">
-    <iconset theme="question"/>
+    <iconset theme="question">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>Contents</string>
@@ -275,15 +305,17 @@ padding: 10px</string>
   </action>
   <action name="actionAbout_Ollama_Chat">
    <property name="icon">
-    <iconset theme="help-about"/>
+    <iconset theme="help-about">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>About Ollama Chat</string>
    </property>
   </action>
-  <action name="actionQuit">
+  <action name="action_quit">
    <property name="icon">
-    <iconset theme="window-close"/>
+    <iconset theme="window-close">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>Quit</string>

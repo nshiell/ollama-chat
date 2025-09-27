@@ -24,9 +24,12 @@ from .window_mixin import WindowMixin
 import ollama
 import getpass, locale, platform, os
 from datetime import datetime
-from .state import State
+#from .state import State
 from .style import styles
 from .conversation import Conversation
+
+from .state import State
+
 
 class ModelNames:
     def __init__(self, client, load=False):
@@ -114,9 +117,11 @@ class QueryThread(QThread):
         self.messages = messages
         self.model_name = model_name
         self.client = client
+        self.stop = False
 
 
     def run(self):
+        self.stop = False
         self.typing.emit(True)
 
         messages_context = [
@@ -136,6 +141,8 @@ class QueryThread(QThread):
 
         for part in self.client.chat(**query):
             self.word.emit(part['message']['content'])
+            if self.stop:
+                break
 
         self.typing.emit(False)
 
@@ -185,37 +192,16 @@ class QScrollAreaChat(QScrollArea):
 
 
 class MainWindow(QMainWindow, WindowMixin):
-    def __init__(self):
-        self.conversation = Conversation([
-            {'role': 'system', 'content': '''
-                You are being used as a desktop conversational AI,
-                the software is called "Ollama Chat"'''
-            },
-
-            {'role': 'system', 'content': """
-                The user's system language is %s,
-                take that into accouunt when replying""" % locale.getlocale()[0]
-            },
-
-            {'role': 'system', 'content': "The user's username is '%s'" %
-                getpass.getuser()
-            },
-
-            {'role': 'system', 'content':
-                "The user's operating system is '%s (%s)'" % (
-                    platform.system(),
-                    os.environ.get('DESKTOP_SESSION')
-                )
-            }
-        ])
-
-        self.state = State()
-        self.conversation.model_name = 'mistral-nemo:latest'
+    def __init__(self, settings, conversation, create_window_function):
+        self.conversation = conversation
+        self.settings = settings
+        self.create_window_function = create_window_function
+        #self.conversation.model_name = 'mistral-nemo:latest'
 
         self.current_bubble_text = None
 
         try:
-            client = ollama.Client(self.state.url)
+            client = ollama.Client(self.settings['url'])
         except Exception:
             client = None
 
@@ -229,14 +215,23 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.swap_widgets()
         self.setup_remove_template_widgets()
-        self.settings_dialog = SettingsDialog(self.state)
+        self.settings_dialog = SettingsDialog(self.settings)
 
         self.message.setFocus()
         self.bind()
 
+        for message in conversation.messages:
+            if message['role'] == 'user':
+                self.add_user_bubble(message['content'])
+            elif message['role'] == 'assistant':
+                self.add_assistant_bubble('AI', message['content'])
+
 
     def swap_widgets(self):
-        self.swap_widget(self.combo_models, QComboBoxModels(self.models))
+        self.swap_widget(
+            self.combo_models,
+            QComboBoxModels(self.models, self.conversation.model_name)
+        )
         self.swap_widget_deep_clone(self.scrollArea, QScrollAreaChat())
 
 
@@ -255,34 +250,33 @@ class MainWindow(QMainWindow, WindowMixin):
         self.w['frame_user'].setParent(None)
 
 
-    def bind(self):
-        self.state.bind('changed', self.state_change)
+    def ask(self):
+        ask(
+            self.message,
+            self.queryThread,
+            self.conversation,
+            self.combo_models
+        )
 
+
+    def bind(self):
+        self.settings.bind('changed', self.settings_change)
+        # fixme!
         self.conversation.bind = {
             'add_word': [self.word_add],
             'assistant_typing': [self.assistant_typing_toggled],
             'add_user_message': [self.add_user_bubble],
         }
 
-        self.message.returnPressed.connect(lambda: ask(
-            self.message,
-            self.queryThread,
-            self.conversation,
-            self.combo_models
-        ))
-
-        self.send.clicked.connect(lambda: ask(
-            self.message,
-            self.queryThread,
-            self.conversation,
-            self.combo_models
-        ))
+        self.message.returnPressed.connect(self.ask)
+        self.send.clicked.connect(self.ask)
 
         self.menu('action_configure', self.settings_dialog.show)
+        self.menu('action_new_window', self.create_window_function)
+        self.menu('action_quit', QApplication.quit)
 
-
-    def state_change(self):
-        self.models.client = self.create_client(self.state.url)
+    def settings_change(self):
+        self.models.client = self.create_client(self.settings_dialog.url)
         self.conversation.client = self.models.client
         self.models.reload()
         self.combo_models.redraw()
@@ -298,14 +292,14 @@ class MainWindow(QMainWindow, WindowMixin):
     def assistant_typing_toggled(self, value):
         if value:
             self.add_assistant_bubble('AI')
+        else:
+            self.current_bubble_frame.done()
 
 
     def add_assistant_bubble(self, title, message=None):
-        frame = self.clone_widget_into('frame_assistant', QFrame())
-        frame.findChild(QLabel, 'author_assistant').setText(title)
-
-        self.current_bubble_text = frame.findChild(QLabel, 'assistant_text')
-        self.current_bubble_text.setText(message if message else '')
+        frame = QFrameAssistant(title, message, self.queryThread)
+        self.current_bubble_text = frame.current_bubble_text
+        self.current_bubble_frame = frame
 
         self.w['vertical_layout_conversation'].addWidget(frame)
         return frame
@@ -321,18 +315,55 @@ class MainWindow(QMainWindow, WindowMixin):
         return frame
 
 
+class QFrameAssistant(QFrame):
+    def __init__(self, title, message=None, queryThread=None):
+        super().__init__()
+        self.queryThread = queryThread
+
+        self.populate_widgets()
+        self.findChild(QLabel, 'author_assistant').setText(title)
+        self.current_bubble_text = self.findChild(QLabel, 'assistant_text')
+        self.current_bubble_text.setText(message if message else '')
+
+        if message:
+            self.done()
+
+        self.bind()
+
+
+    def populate_widgets(self):
+        class Mixin(QMainWindow, WindowMixin):
+            pass
+        mixin = Mixin()
+        mixin.load_xml('main_window.ui')
+        mixin.clone_widget_into('frame_assistant', self)
+
+
+    def bind(self):
+        self.btn_stop.clicked.connect(self.stop)
+
+
+    def stop(self):
+        self.queryThread.stop = True
+
+
+    def done(self):
+        self.btn_stop.setParent(None)
+        self.queryThread = None
+
+
 class QComboBoxModels(QComboBox):
     unable_to_connect_text = 'Unable to connect!'
 
-    def __init__(self, models):
+    def __init__(self, models, selected_model):
         self.models = models
         super().__init__()
 
-        self.redraw(False)
+        self.redraw(False, selected_model)
 
         #models.bind('udpated', self.redraw)
 
-    def redraw(self, clear=True):
+    def redraw(self, clear=True, selected_model=None):
         if clear:
             self.clear()
 
@@ -342,15 +373,17 @@ class QComboBoxModels(QComboBox):
         else:
             self.addItems(self.models)
             self.setEnabled(True)
+            if selected_model in self.models:
+                self.setCurrentIndex(self.models.index(selected_model))
 
 
 class SettingsDialog(QDialog, WindowMixin):
-    def __init__(self, state):
+    def __init__(self, settings):
         super().__init__()
         self.load_xml('settings.ui')
-        self.state = state
+        self.settings = settings
 
-        self.models = ModelNames(self.create_client(self.state.url), True)
+        self.models = ModelNames(self.create_client(self.settings['url']), True)
         self.bind()
         #self.models.bind('client_change', lambda: print('sdfg'))
 
@@ -366,16 +399,16 @@ class SettingsDialog(QDialog, WindowMixin):
         self.tabs.setCurrentIndex(0)
         self.swap_widget(self.combo_models, QComboBoxModels(self.models))
 
-        self.plain_text_context.setPlainText(self.state.context)
-        self.line_edit_url.setText(self.state.url)
+        self.plain_text_context.setPlainText(self.settings['context'])
+        self.line_edit_url.setText(self.settings['url'])
 
         for i, style_details in enumerate(style.styles):
             self.combo_styles.insertItem(i, style_details.name)
-            if style_details.name == self.state.style:
+            if style_details.name == self.settings['style']:
                 self.combo_styles.setCurrentIndex(i)
 
-        self.combo_font.setCurrentFont(QFont(self.state.font))
-        self.spin_box_font_size.setValue(self.state.font_size)
+        self.combo_font.setCurrentFont(QFont(self.settings['font']))
+        self.spin_box_font_size.setValue(self.settings['font_size'])
         self.label_connected.setText('Connected')
 
 
@@ -398,12 +431,12 @@ class SettingsDialog(QDialog, WindowMixin):
 
 
     def ok(self):
-        self.state.update({
-            'model_name'    : self.combo_models.currentText(),
-            'context'       : self.plain_text_context.toPlainText(),
-            'url'           : self.line_edit_url.text(),
-            'style'         : self.combo_styles.currentText(),
-            'font'          : self.combo_font.currentFont().family(),
-            'font_size'     : self.spin_box_font_size.value()
-        })
+        self.settings.update(
+            model_name=self.combo_models.currentText(),
+            context=self.plain_text_context.toPlainText(),
+            url=self.line_edit_url.text(),
+            style=self.combo_styles.currentText(),
+            font=self.combo_font.currentFont().family(),
+            font_size=self.spin_box_font_size.value()
+        )
         self.hide()

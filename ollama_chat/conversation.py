@@ -4,18 +4,16 @@ class Conversation:
     def __init__(
             self,
             messages=[],
-            assistant_typing=False,
-            bind={},
             model_name=None,
             client=None,
             name=None
         ):
         self.messages = messages
-        self.assistant_typing_ = assistant_typing
-        self.bind = bind
+        self.assistant_typing_ = False
+        self.bind = None
         self.model_name = model_name
         self.client = client
-        self.name = name if name else uuid.uuid4()
+        self.name = name if name else str(uuid.uuid4())
 
 
     def __getattr__(self, method):
@@ -31,7 +29,7 @@ class Conversation:
 
 
     def add_word(self, word):
-        if not self.messages or self.messages[-1]['role'] == 'assistant':
+        if not self.messages or self.messages[-1]['role'] != 'assistant':
             self.add_assistant_message()
 
         self.messages[-1]['content']+= word
@@ -77,9 +75,6 @@ class Conversation:
         })
 
 
-    def to_dict(self):
-        return {
-            'name'       : self.name,
-            'messages'   : self.messages,
-            'model_name' : self.model_name
-        }
+    def __iter__(self):
+        yield 'messages', self.messages
+        yield 'model_name', self.model_name

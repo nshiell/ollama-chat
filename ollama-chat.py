@@ -17,14 +17,36 @@
 import sys, signal
 from PyQt5.QtWidgets import QApplication
 from ollama_chat import MainWindow
+from ollama_chat import State
+from ollama_chat import Conversation
+
 #from database_dossier.ui.types.window_mixin import load_web_engine_if_needed
+
+def create_conversation_window(state, conversation=None):
+    if not conversation:
+        conversation = Conversation(model_name=state.settings['model_name'])
+        state.conversations.append(conversation)
+
+    window = MainWindow(
+        state.settings,
+        conversation,
+        lambda: create_conversation_window(state)
+    )
+    window.show()
+
 
 if __name__ == '__main__':
     # Kill the app on ctrl-c
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     #load_web_engine_if_needed()
     app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
+
+    state = State()
+    if not len(state.conversations):
+        state.conversations.append(Conversation())
+
+    for conversation in state.conversations:
+        create_conversation_window(state, conversation)
 
     app.exec_()
+    state.save()
