@@ -22,15 +22,15 @@ from ollama_chat import Conversation
 
 #from database_dossier.ui.types.window_mixin import load_web_engine_if_needed
 
-def create_conversation_window(state, conversation=None):
-    if not conversation:
-        conversation = Conversation(model_name=state.settings['model_name'])
+def create_conversation_window(state, conversation=None, must_create=False):
+    if must_create:
+        conversation = Conversation()
         state.conversations.append(conversation)
 
     window = MainWindow(
         state.settings,
         conversation,
-        lambda: create_conversation_window(state)
+        lambda: create_conversation_window(state, None, True)
     )
     window.show()
 

@@ -261,6 +261,7 @@ padding: 10px;
     <addaction name="action_new_window"/>
     <addaction name="action_configure"/>
     <addaction name="separator"/>
+    <addaction name="action_close_Window"/>
     <addaction name="action_quit"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
@@ -280,6 +281,9 @@ padding: 10px;
    </property>
    <property name="text">
     <string>New Window</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+N</string>
    </property>
   </action>
   <action name="action_configure">
@@ -314,11 +318,24 @@ padding: 10px;
   </action>
   <action name="action_quit">
    <property name="icon">
-    <iconset theme="window-close">
-     <normaloff>.</normaloff>.</iconset>
+    <iconset theme="application-exit"/>
    </property>
    <property name="text">
     <string>Quit</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Q</string>
+   </property>
+  </action>
+  <action name="action_close_Window">
+   <property name="icon">
+    <iconset theme="window-close"/>
+   </property>
+   <property name="text">
+    <string>Close Window</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+W</string>
    </property>
   </action>
  </widget>

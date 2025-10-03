@@ -8,6 +8,7 @@ class Conversation:
             client=None,
             name=None
         ):
+        self.mark_for_deletion = False
         self.messages = messages
         self.assistant_typing_ = False
         self.bind = None

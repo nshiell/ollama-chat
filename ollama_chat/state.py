@@ -17,8 +17,8 @@
 """
 import json, re
 from appdirs import *
-from os import path
-from os.path import join
+from os import path, remove
+from os.path import join, exists
 from .conversation import Conversation
 import glob
 
@@ -82,7 +82,7 @@ class Settings:
 
         for key, value in kwargs.items():
             try:
-                self.__setitem__(key, item)
+                self.__setitem__(key, value)
             except KeyError:
                 pass
 
@@ -153,17 +153,22 @@ def load_state(state):
         except Exception as e:
             print(e)
             continue
-        #data = json.load(open(conversation_path, 'r'))
-        #print(txt_files)
+
+
+def delete_file(path):
+    if exists(path):
+        os.remove(path)
 
 
 def save_state(state):
     set_config(user_config_file_path, state.settings)
     for con in state.conversations:
-        if con.messages:
-            path = join(dirs.user_config_dir, con.name + '.conversation.json')
+        path = join(dirs.user_config_dir, con.name + '.conversation.json')
+        if con.mark_for_deletion:
+            delete_file(path)
+            state.conversations.remove(con)
+        elif con.messages:
             set_config(path, con)
-    #user_config_file_path = os.path.join(dirs.user_config_dir, 'config.json')
 
 
 def get_config():

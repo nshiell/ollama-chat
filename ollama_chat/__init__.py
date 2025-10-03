@@ -273,10 +273,29 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.menu('action_configure', self.settings_dialog.show)
         self.menu('action_new_window', self.create_window_function)
+        self.menu('action_close_window', self.close)
         self.menu('action_quit', QApplication.quit)
 
+
+    def closeEvent(self, event):
+        result = QMessageBox.question(
+            self,
+            'Close Conversation',
+            'Do you want to close and remove this conversation?',
+            QMessageBox.Cancel |QMessageBox.Yes | QMessageBox.No
+        )
+
+        if result == QMessageBox.No:
+            event.accept()
+        elif result == QMessageBox.Yes:
+            self.conversation.mark_for_deletion = True
+            event.accept()
+        else:
+            event.ignore()
+
+
     def settings_change(self):
-        self.models.client = self.create_client(self.settings_dialog.url)
+        self.models.client = self.create_client(self.settings_dialog.line_edit_url)
         self.conversation.client = self.models.client
         self.models.reload()
         self.combo_models.redraw()
@@ -355,7 +374,7 @@ class QFrameAssistant(QFrame):
 class QComboBoxModels(QComboBox):
     unable_to_connect_text = 'Unable to connect!'
 
-    def __init__(self, models, selected_model):
+    def __init__(self, models, selected_model=None):
         self.models = models
         super().__init__()
 

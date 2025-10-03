@@ -28,6 +28,7 @@ from xml.etree import ElementTree as ET
 from pprint import pprint
 
 def load_web_engine_if_needed():
+    return False
     try:
         from PyQt5.QtWebKitWidgets import QWebView
         return False
