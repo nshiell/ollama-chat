@@ -3,9 +3,9 @@ import uuid
 class Conversation:
     def __init__(
             self,
-            messages=[],
-            model_name=None,
-            client=None,
+            messages,
+            model_name,
+            #client,
             name=None
         ):
         self.mark_for_deletion = False
@@ -13,9 +13,9 @@ class Conversation:
         self.assistant_typing_ = False
         self.bind = None
         self.model_name = model_name
-        self.client = client
+        #self.client = client
         self.name = name if name else str(uuid.uuid4())
-
+        self.window = None
 
     def __getattr__(self, method):
         return getattr(self.messages, method)

@@ -20,32 +20,12 @@ from appdirs import *
 from os import path, remove
 from os.path import join, exists
 from .conversation import Conversation
+from .bindings import Bindings
 import glob
 
 
 dirs = AppDirs('ollama-chat', 'nshiell')
 user_config_file_path = join(dirs.user_config_dir, 'config.json')
-
-from pprint import pprint
-
-class Bindings:
-    def __init__(self, names):
-        self.events = d = dict.fromkeys(names, [])
-
-
-    def __call__(self, name, function):
-        if name not in self.events:
-            raise ValueError('Name "%s" not registered' % name)
-
-        self.events[name].append(function)
-
-
-    def trigger(self, name):
-        if name not in self.events:
-            raise ValueError('Name "%s" not registered' % name)
-
-        for function in self.events[name]:
-            function()
 
 
 class Settings:

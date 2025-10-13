@@ -15,7 +15,6 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -29,6 +28,9 @@ from .style import styles
 from .conversation import Conversation
 
 from .state import State
+
+
+
 
 
 class ModelNames:
@@ -138,7 +140,7 @@ class QueryThread(QThread):
             'messages': messages_context + self.messages,
             'stream': True
         }
-
+        #ResponseError
         for part in self.client.chat(**query):
             self.word.emit(part['message']['content'])
             if self.stop:
@@ -147,7 +149,7 @@ class QueryThread(QThread):
         self.typing.emit(False)
 
 
-def ask(q_input, thread, conversation, combo_models):
+def ask(q_input, thread, conversation, client, combo_models):
     if conversation.assistant_typing:
         return None
 
@@ -163,8 +165,41 @@ def ask(q_input, thread, conversation, combo_models):
 
     # is this good?
     thread.model_name = conversation.model_name
-    thread.client = conversation.client
+    thread.client = client
     thread.start()
+
+from .bindings import Bindings
+class QApplicationOllamaChat(QApplication):
+    def __init__(self, argv):
+        super().__init__(argv)
+        self.state = State()
+        self.conversations = self.state.conversations
+
+
+    def show_conversation_windows(self):
+        if not len(self.conversations):
+            self.add_new_conversation_window(False)
+            return
+
+        for conversation in self.conversations:
+            if not conversation.window:
+                win = MainWindow(self.state.settings, conversation)
+                win.bind('new_window_request', self.add_new_conversation_window)
+                win.show()
+                conversation.window = win
+
+
+    def add_new_conversation_window(self):
+        self.conversations.append(Conversation(
+            messages=[],
+            model_name=self.state.settings['model_name']
+        ))
+
+        self.show_conversation_windows()
+
+
+    def save_state(self):
+        self.state.save()
 
 
 class QScrollAreaChat(QScrollArea):
@@ -192,21 +227,19 @@ class QScrollAreaChat(QScrollArea):
 
 
 class MainWindow(QMainWindow, WindowMixin):
-    def __init__(self, settings, conversation, create_window_function):
+    def __init__(self, settings, conversation):
         self.conversation = conversation
         self.settings = settings
-        self.create_window_function = create_window_function
         #self.conversation.model_name = 'mistral-nemo:latest'
 
         self.current_bubble_text = None
 
         try:
-            client = ollama.Client(self.settings['url'])
+            self.client = ollama.Client(self.settings['url'])
         except Exception:
-            client = None
+            self.client = None
 
-        self.models = ModelNames(client, True)
-        self.conversation.client = self.models.client
+        self.models = ModelNames(self.client, True)
 
         super().__init__()
         self.load_xml('main_window.ui')
@@ -218,7 +251,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.settings_dialog = SettingsDialog(self.settings)
 
         self.message.setFocus()
-        self.bind()
+        self.setup_bindings()
+
 
         for message in conversation.messages:
             if message['role'] == 'user':
@@ -255,11 +289,13 @@ class MainWindow(QMainWindow, WindowMixin):
             self.message,
             self.queryThread,
             self.conversation,
+            self.client,
             self.combo_models
         )
 
 
-    def bind(self):
+    def setup_bindings(self):
+        self.bind = Bindings(['new_window_request'])
         self.settings.bind('changed', self.settings_change)
         # fixme!
         self.conversation.bind = {
@@ -272,7 +308,9 @@ class MainWindow(QMainWindow, WindowMixin):
         self.send.clicked.connect(self.ask)
 
         self.menu('action_configure', self.settings_dialog.show)
-        self.menu('action_new_window', self.create_window_function)
+        self.menu('action_new_window', lambda:
+            self.bind.trigger('new_window_request')
+        )
         self.menu('action_close_window', self.close)
         self.menu('action_quit', QApplication.quit)
 

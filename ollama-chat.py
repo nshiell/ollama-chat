@@ -13,40 +13,14 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 """
-
 import sys, signal
-from PyQt5.QtWidgets import QApplication
-from ollama_chat import MainWindow
-from ollama_chat import State
-from ollama_chat import Conversation
-
-#from database_dossier.ui.types.window_mixin import load_web_engine_if_needed
-
-def create_conversation_window(state, conversation=None, must_create=False):
-    if must_create:
-        conversation = Conversation()
-        state.conversations.append(conversation)
-
-    window = MainWindow(
-        state.settings,
-        conversation,
-        lambda: create_conversation_window(state, None, True)
-    )
-    window.show()
-
+from ollama_chat import QApplicationOllamaChat
 
 if __name__ == '__main__':
     # Kill the app on ctrl-c
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    #load_web_engine_if_needed()
-    app = QApplication(sys.argv)
 
-    state = State()
-    if not len(state.conversations):
-        state.conversations.append(Conversation())
-
-    for conversation in state.conversations:
-        create_conversation_window(state, conversation)
-
+    app = QApplicationOllamaChat(sys.argv)
+    app.show_conversation_windows()
     app.exec_()
-    state.save()
+    app.save_state()
