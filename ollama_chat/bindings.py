@@ -18,7 +18,9 @@
 
 class Bindings:
     def __init__(self, names):
-        self.events = d = dict.fromkeys(names, [])
+        self.events = {}
+        for name in names:
+            self.events[name] = []
 
 
     def __call__(self, name, function):
@@ -28,9 +30,13 @@ class Bindings:
         self.events[name].append(function)
 
 
-    def trigger(self, name):
+    def trigger(self, name, value='NO_VALUE'):
         if name not in self.events:
             raise ValueError('Name "%s" not registered' % name)
 
-        for function in self.events[name]:
-            function()
+        if value == 'NO_VALUE':
+            for function in self.events[name]:
+                function()
+        else:
+            for function in self.events[name]:
+                function(value)

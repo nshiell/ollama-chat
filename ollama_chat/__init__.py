@@ -35,12 +35,10 @@ from .state import State
 
 class ModelNames:
     def __init__(self, client, load=False):
-        #self._client = client
         self.client = client
         self.models = None
         self.loaded = False
         self.last_exception = None
-        #self.bind = Bindings()
 
         if load:
             self.load()
@@ -74,15 +72,6 @@ class ModelNames:
         return self.models[item]
 
 
-    #@property
-    #def client(self):
-    #    return self._client
-
-    #@client.setter
-    #def client(self, client):
-    #    self._client = client
-
-
     def load(self):
         if not self.loaded:
             if self.client is None:
@@ -112,6 +101,7 @@ class ModelNames:
 class QueryThread(QThread):
     word = pyqtSignal(str)
     typing = pyqtSignal(bool)
+    word_error = pyqtSignal(str)
 
 
     def __init__(self, messages, client=None, model_name=None):
@@ -140,9 +130,13 @@ class QueryThread(QThread):
             'messages': messages_context + self.messages,
             'stream': True
         }
-        #ResponseError
+
         for part in self.client.chat(**query):
-            self.word.emit(part['message']['content'])
+            try:
+                self.word.emit(part['message']['content'])
+            except ResponseError as e:
+                self.word_error.emit(e)
+
             if self.stop:
                 break
 
@@ -168,6 +162,7 @@ def ask(q_input, thread, conversation, client, combo_models):
     thread.client = client
     thread.start()
 
+
 from .bindings import Bindings
 class QApplicationOllamaChat(QApplication):
     def __init__(self, argv):
@@ -178,7 +173,7 @@ class QApplicationOllamaChat(QApplication):
 
     def show_conversation_windows(self):
         if not len(self.conversations):
-            self.add_new_conversation_window(False)
+            self.add_new_conversation_window()
             return
 
         for conversation in self.conversations:
@@ -230,7 +225,6 @@ class MainWindow(QMainWindow, WindowMixin):
     def __init__(self, settings, conversation):
         self.conversation = conversation
         self.settings = settings
-        #self.conversation.model_name = 'mistral-nemo:latest'
 
         self.current_bubble_text = None
 
@@ -276,7 +270,10 @@ class MainWindow(QMainWindow, WindowMixin):
     def setup_thread(self):
         self.queryThread = QueryThread(self.conversation.messages)
         self.queryThread.word.connect(self.conversation.add_word)
-        self.queryThread.typing.connect(self.conversation.set_assistant_typing)
+
+        def set_assistant_typing(value):
+            self.conversation.assistant_typing = value
+        self.queryThread.typing.connect(set_assistant_typing)
 
 
     def setup_remove_template_widgets(self):
@@ -298,11 +295,12 @@ class MainWindow(QMainWindow, WindowMixin):
         self.bind = Bindings(['new_window_request'])
         self.settings.bind('changed', self.settings_change)
         # fixme!
-        self.conversation.bind = {
-            'add_word': [self.word_add],
-            'assistant_typing': [self.assistant_typing_toggled],
-            'add_user_message': [self.add_user_bubble],
-        }
+        self.conversation.bind('add_word', self.word_add)
+        self.conversation.bind(
+            'assistant_typing',
+            self.assistant_typing_toggled
+        )
+        self.conversation.bind('add_user_message', self.add_user_bubble)
 
         self.message.returnPressed.connect(self.ask)
         self.send.clicked.connect(self.ask)
@@ -320,7 +318,7 @@ class MainWindow(QMainWindow, WindowMixin):
             self,
             'Close Conversation',
             'Do you want to close and remove this conversation?',
-            QMessageBox.Cancel |QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Cancel | QMessageBox.Yes | QMessageBox.No
         )
 
         if result == QMessageBox.No:
@@ -418,7 +416,6 @@ class QComboBoxModels(QComboBox):
 
         self.redraw(False, selected_model)
 
-        #models.bind('udpated', self.redraw)
 
     def redraw(self, clear=True, selected_model=None):
         if clear:
@@ -442,7 +439,6 @@ class SettingsDialog(QDialog, WindowMixin):
 
         self.models = ModelNames(self.create_client(self.settings['url']), True)
         self.bind()
-        #self.models.bind('client_change', lambda: print('sdfg'))
 
 
     def create_client(self, url):
@@ -483,7 +479,6 @@ class SettingsDialog(QDialog, WindowMixin):
     def connect(self):
         self.models.client = self.create_client(self.line_edit_url.text())
         self.models.reload()
-        #enable = self.models.client is None
         self.combo_models.redraw()
 
 
