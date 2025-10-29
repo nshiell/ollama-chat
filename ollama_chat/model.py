@@ -16,11 +16,12 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtWidgets import QWidget
+from .conversation import Conversation
 import getpass, locale, platform, os
 import ollama
 from datetime import datetime
-
-#from .widgets import *
+from abc import ABC, abstractmethod
 
 
 class QueryThread(QThread):
@@ -134,24 +135,46 @@ class ModelNames:
         self.load()
 
 
-def ask(q_input, thread, conversation, client, combo_models):
-    if conversation.assistant_typing:
-        return None
 
-    conversation.ai_responding = True
-    conversation.model_name = combo_models.currentText()
+class AskerAbstract(ABC):
+    """
+    For wrapping around the thread
+    For handling the inout and initiating the query
+    """
 
-    message = q_input.text().strip()
-    if not message:
-        return None
+    def __init__(self, *,
+            conversation : Conversation,
+            client       : ollama.Client) -> None:
 
-    conversation.add_user_message(message)
-    q_input.setText('')
+        self.conversation = conversation
+        self.client = client
 
-    # is this good?
-    thread.model_name = conversation.model_name
-    thread.client = client
-    thread.start()
+        # If self.thread is None, then we are NOT tyring a reply from the AI
+        self.thread: Optional[QueryThread] = None
+
+
+    def _prepair_message(self, message: str) -> str:
+        """
+        Does processing on the inout string before sending the message
+        """
+        return message.strip()
+
+
+    def _create_thread(self, model_name) -> None:
+        """
+        Create a new QueryThread() in self.thread
+        """
+
+        self.thread = QueryThread(
+            self.conversation.messages,
+            self.client,
+            model_name
+        )
+
+
+    @abstractmethod
+    def ask(self) -> None:
+        pass
 
 
 def create_client(url):

@@ -15,15 +15,20 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+from __future__ import annotations
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from .window_mixin import WindowMixin
 from .model import *
+from .conversation import Conversation
 from .bindings import Bindings
+from typing import Optional
+from ollama import Client
+from .asker import *
 
-class QScrollAreaChat(QScrollArea):
+class ScrollAreaChat(QScrollArea):
     def __init__(self):
         super().__init__()
 
@@ -48,27 +53,35 @@ class QScrollAreaChat(QScrollArea):
 
 
 class MainWindow(QMainWindow, WindowMixin):
-    def __init__(self, settings, conversation, models):
+    """
+    The window for conducting chats
+    """
+
+    def __init__(self, *,
+            defaultSettings : Settings,
+            conversation    : Conversation,
+            models          : ModelNames) -> None:
+
         self.conversation = conversation
-        self.settings = settings
+        self.settings = defaultSettings
 
         self.current_bubble_text = None
 
-        #try:
-        #    self.client = ollama.Client(self.settings['url'])
-        #except Exception:
-            #self.client = None
-
         self.models = models
-        #self.models = ModelNames(self.client, True)
 
         super().__init__()
         self.load_xml('main_window.ui')
 
-        self.setup_thread()
-
         self.swap_widgets()
         self.setup_remove_template_widgets()
+
+        self.ask = Asker(
+            q_message=self.message,
+            conversation=conversation,
+            client=self.models.client,
+            q_combo_models=self.combo_models
+        )
+
 
         # Don't call this on load
         self.settings_dialog = SettingsDialog(self.settings)
@@ -87,37 +100,27 @@ class MainWindow(QMainWindow, WindowMixin):
     def swap_widgets(self):
         self.swap_widget(
             self.combo_models,
-            QComboBoxModels(self.models, self.conversation.model_name)
+            ComboBoxModels(self.models, self.conversation.model_name)
         )
-        self.swap_widget_deep_clone(self.scrollArea, QScrollAreaChat())
+        self.swap_widget_deep_clone(self.scrollArea, ScrollAreaChat())
 
 
     def word_add(self, word):
         self.current_bubble_text.setText(self.current_bubble_text.text() + word)
 
 
-    def setup_thread(self):
-        self.queryThread = QueryThread(self.conversation.messages)
-        self.queryThread.word.connect(self.conversation.add_word)
+    def create_thread(self):
+        self._query_thread = QueryThread(self.conversation.messages)
+        self._query_thread.word.connect(self.conversation.add_word)
 
         def set_assistant_typing(value):
             self.conversation.assistant_typing = value
-        self.queryThread.typing.connect(set_assistant_typing)
+        self._query_thread.typing.connect(set_assistant_typing)
 
 
     def setup_remove_template_widgets(self):
         self.w['frame_assistant'].setParent(None)
         self.w['frame_user'].setParent(None)
-
-
-    def ask(self):
-        ask(
-            self.message,
-            self.queryThread,
-            self.conversation,
-            self.models.client,
-            self.combo_models
-        )
 
 
     def setup_bindings(self):
@@ -181,7 +184,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
 
     def add_assistant_bubble(self, title, message=None):
-        frame = QFrameAssistant(title, message, self.queryThread)
+        frame = FrameAssistant(title, message, self.ask.thread)
         self.current_bubble_text = frame.current_bubble_text
         self.current_bubble_frame = frame
 
@@ -199,7 +202,7 @@ class MainWindow(QMainWindow, WindowMixin):
         return frame
 
 
-class QFrameAssistant(QFrame):
+class FrameAssistant(QFrame):
     def __init__(self, title, message=None, queryThread=None):
         super().__init__()
         self.queryThread = queryThread
@@ -236,7 +239,7 @@ class QFrameAssistant(QFrame):
         self.queryThread = None
 
 
-class QComboBoxModels(QComboBox):
+class ComboBoxModels(QComboBox):
     unable_to_connect_text = 'Unable to connect!'
 
     def __init__(self, models, selected_model=None):
@@ -278,7 +281,7 @@ class SettingsDialog(QDialog, WindowMixin):
 
     def setup_data_state(self):
         self.tabs.setCurrentIndex(0)
-        self.swap_widget(self.combo_models, QComboBoxModels(self.models))
+        self.swap_widget(self.combo_models, ComboBoxModels(self.models))
 
         self.plain_text_context.setPlainText(self.settings['context'])
         self.line_edit_url.setText(self.settings['url'])

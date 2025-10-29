@@ -15,6 +15,8 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+from __future__ import annotations
+
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -33,7 +35,7 @@ from .state import State
 
 #from .bindings import Bindings
 class QApplicationOllamaChat(QApplication):
-    def __init__(self, argv):
+    def __init__(self, argv) -> None:
         super().__init__(argv)
         self.state = State()
         self.conversations = self.state.conversations
@@ -41,20 +43,20 @@ class QApplicationOllamaChat(QApplication):
         self.models = ModelNames(self.client)
 
 
-    def show_conversation_windows(self):
+    def show_conversation_windows(self) -> None:
         if not len(self.conversations):
             self.add_new_conversation_window()
             return
 
         for conversation in self.conversations:
             if not conversation.window:
-                win = MainWindow(self.state.settings, conversation, self.models)
+                win = MainWindow(defaultSettings=self.state.settings, conversation=conversation, models=self.models)
                 win.bind('new_window_request', self.add_new_conversation_window)
                 win.show()
                 conversation.window = win
 
 
-    def add_new_conversation_window(self):
+    def add_new_conversation_window(self) -> None:
         self.conversations.append(Conversation(
             messages=[],
             model_name=self.state.settings['model_name']
@@ -63,5 +65,5 @@ class QApplicationOllamaChat(QApplication):
         self.show_conversation_windows()
 
 
-    def save_state(self):
+    def save_state(self) -> None:
         self.state.save()
