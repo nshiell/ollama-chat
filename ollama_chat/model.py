@@ -18,6 +18,7 @@
 from PyQt5.QtCore import QThread, pyqtSignal
 import getpass, locale, platform, os
 import ollama
+from datetime import datetime
 
 #from .widgets import *
 

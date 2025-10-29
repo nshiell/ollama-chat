@@ -23,7 +23,7 @@ from .window_mixin import WindowMixin
 #from ollama import chat, list as ai_list, Client
 #import ollama
 import getpass, locale, platform, os
-from datetime import datetime
+
 #from .state import State
 from .style import styles
 from .conversation import Conversation
