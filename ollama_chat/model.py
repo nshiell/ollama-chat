@@ -15,6 +15,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QWidget
 from .conversation import Conversation
@@ -144,10 +145,10 @@ class AskerAbstract(ABC):
 
     def __init__(self, *,
             conversation : Conversation,
-            client       : ollama.Client) -> None:
+            client_wrapper) -> None: # add in a type
 
         self.conversation = conversation
-        self.client = client
+        self.client_wrapper = client_wrapper
 
         # If self.thread is None, then we are NOT tyring a reply from the AI
         self.thread: Optional[QueryThread] = None
@@ -167,13 +168,16 @@ class AskerAbstract(ABC):
 
         self.thread = QueryThread(
             self.conversation.messages,
-            self.client,
+            self.client_wrapper.client,
             model_name
         )
 
 
     @abstractmethod
     def ask(self) -> None:
+        """
+        Start answering the current message
+        """
         pass
 
 

@@ -23,11 +23,14 @@ from .model import AskerAbstract
 class Asker(AskerAbstract):
     def __init__(self, *,
             conversation   : Conversation,
-            client         : Client,
+            client_wrapper : client_wrapper,
             q_message      : QWidget,
             q_combo_models : QWidget) -> None:
 
-        super().__init__(conversation=conversation, client=client)
+        super().__init__(
+            conversation=conversation,
+            client_wrapper=client_wrapper
+        )
 
         self.q_message = q_message
         self.q_combo_models = q_combo_models
@@ -35,7 +38,7 @@ class Asker(AskerAbstract):
         self.thread: Optional[QueryThread] = None
 
 
-    def set_assistant_typing(self, value):
+    def set_assistant_typing(self, value) -> None:
         self.conversation.assistant_typing = value
         if not value and self.thread:
             self.thread.quit()
@@ -48,6 +51,10 @@ class Asker(AskerAbstract):
 
 
     def ask(self) -> None:
+        """
+        Send a new message to the stack and fire up the thread to get the
+        API client to answer it
+        """
         if self.thread:
             return None
 
