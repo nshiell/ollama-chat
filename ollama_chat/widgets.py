@@ -78,13 +78,13 @@ class MainWindow(QMainWindow, WindowMixin):
         self.ask = Asker(
             q_message=self.message,
             conversation=conversation,
-            client=self.models.client,
+            client_wrapper=self.models,
             q_combo_models=self.combo_models
         )
 
 
         # Don't call this on load
-        self.settings_dialog = SettingsDialog(self.settings)
+        #self.settings_dialog = SettingsDialog(self.settings)
 
         self.message.setFocus()
         self.setup_bindings()
@@ -124,8 +124,8 @@ class MainWindow(QMainWindow, WindowMixin):
 
 
     def setup_bindings(self):
-        self.bind = Bindings(['new_window_request'])
-        self.settings.bind('changed', self.settings_change)
+        self.bind = Bindings(['new_window_request', 'settings_show_request'])
+        #self.settings.bind('changed', self.settings_change)
         # fixme!
         self.conversation.bind('add_word', self.word_add)
         self.conversation.bind(
@@ -137,7 +137,10 @@ class MainWindow(QMainWindow, WindowMixin):
         self.message.returnPressed.connect(self.ask)
         self.send.clicked.connect(self.ask)
 
-        self.menu('action_configure', self.settings_dialog.show)
+        self.menu('action_configure', lambda:
+            self.bind.trigger('settings_show_request')
+        )
+        #self.menu('action_configure', self.settings_dialog.show)
         self.menu('action_new_window', lambda:
             self.bind.trigger('new_window_request')
         )
@@ -149,24 +152,32 @@ class MainWindow(QMainWindow, WindowMixin):
         result = QMessageBox.question(
             self,
             'Close Conversation',
-            'Do you want to close and remove this conversation?',
-            QMessageBox.Cancel | QMessageBox.Yes | QMessageBox.No
+            '''Do you want o discard this conversation?
+Do you want to close the program?''',
+            QMessageBox.No | QMessageBox.Cancel | QMessageBox.Close | QMessageBox.Discard
         )
 
         if result == QMessageBox.No:
             event.accept()
-        elif result == QMessageBox.Yes:
+        elif result == QMessageBox.Close:
+            event.accept()
+            QApplication.quit()
+        elif result == QMessageBox.Discard:
             self.conversation.mark_for_deletion = True
             event.accept()
         else:
             event.ignore()
 
 
-    def settings_change(self):
-        self.models.client = self.create_client(self.settings_dialog.line_edit_url)
-        self.conversation.client = self.models.client
-        self.models.reload()
-        self.combo_models.redraw()
+    def settings_changed(self):
+        print(self.settings)
+        #todo fixme!
+        pass
+        # this needs changing!
+        #self.models.client = self.create_client(self.settings_dialog.line_edit_url)
+        #self.conversation.client = self.models.client
+        #self.models.reload()
+        #self.combo_models.redraw()
 
 
     def create_client(self, url):
@@ -269,7 +280,7 @@ class SettingsDialog(QDialog, WindowMixin):
         self.settings = settings
 
         self.models = ModelNames(self.create_client(self.settings['url']), True)
-        self.bind()
+        self.setup_bindings()
 
 
     def create_client(self, url):
@@ -296,7 +307,9 @@ class SettingsDialog(QDialog, WindowMixin):
         self.label_connected.setText('Connected')
 
 
-    def bind(self):
+    def setup_bindings(self):
+        self.bind = Bindings(['settings_changed', 'client_change_request'])
+
         self.button_connect.clicked.connect(self.connect)
         self.button_box.accepted.connect(self.ok)
         self.button_box.rejected.connect(self.hide)
@@ -314,12 +327,17 @@ class SettingsDialog(QDialog, WindowMixin):
 
 
     def ok(self):
-        self.settings.update(
-            model_name=self.combo_models.currentText(),
-            context=self.plain_text_context.toPlainText(),
-            url=self.line_edit_url.text(),
-            style=self.combo_styles.currentText(),
-            font=self.combo_font.currentFont().family(),
-            font_size=self.spin_box_font_size.value()
-        )
+        new_url = self.line_edit_url.text()
+        if self.settings['url'] != new_url:
+            self.bind.trigger('client_change_request', new_url)
+
+        self.settings['model_name'] = self.combo_models.currentText()
+        self.settings['context'] = self.plain_text_context.toPlainText()
+        self.settings['url'] = new_url
+        self.settings['style'] = self.combo_styles.currentText()
+        self.settings['font'] = self.combo_font.currentFont().family()
+        self.settings['font_size'] = self.spin_box_font_size.value()
+
+        self.bind.trigger('settings_changed')
+
         self.hide()
