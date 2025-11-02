@@ -39,7 +39,19 @@ class QApplicationOllamaChat(QApplication):
         super().__init__(argv)
         self.state = State()
         self.conversations = self.state.conversations
-        self.client = create_client(self.state.settings['url'])
+        self.setup_model_client(self.state['url'])
+        self.settings_dialog = self.create_settngs_dialog()
+
+
+    # make this only be created if needed!
+    def create_settngs_dialog(self):
+        dialog = SettingsDialog(self.state)
+        dialog.bind('client_change_request', self.setup_model_client)
+        return dialog
+
+
+    def setup_model_client(self, url:str):
+        self.client = create_client(url)
         self.models = ModelNames(self.client)
 
 
@@ -50,10 +62,23 @@ class QApplicationOllamaChat(QApplication):
 
         for conversation in self.conversations:
             if not conversation.window:
-                win = MainWindow(defaultSettings=self.state.settings, conversation=conversation, models=self.models)
-                win.bind('new_window_request', self.add_new_conversation_window)
-                win.show()
-                conversation.window = win
+                self.add_window_to_conversation(conversation)
+
+
+    def add_window_to_conversation(self, conversation:Conversation) -> None:
+        win = MainWindow(
+            defaultSettings=self.state.settings,
+            conversation=conversation,
+            models=self.models
+        )
+
+        win.bind('new_window_request', self.add_new_conversation_window)
+        win.bind('settings_show_request', self.settings_dialog.show)
+
+        self.settings_dialog.bind('settings_changed', win.settings_changed)
+
+        win.show()
+        conversation.window = win
 
 
     def add_new_conversation_window(self) -> None:
