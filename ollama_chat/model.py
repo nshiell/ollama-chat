@@ -15,6 +15,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+from __future__ import annotations
 
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QWidget
@@ -31,12 +32,16 @@ class QueryThread(QThread):
     word_error = pyqtSignal(str)
 
 
-    def __init__(self, messages, client=None, model_name=None):
+    def __init__(self,
+            messages,
+            client=None,model_name=None,
+            context:Optional[str]=None):
         super().__init__()
         self.messages = messages
         self.model_name = model_name
         self.client = client
         self.stop = False
+        self.context = context
 
 
     def run(self):
@@ -51,6 +56,9 @@ class QueryThread(QThread):
                 "The current user's username is '%s'" % getpass.getuser()
             }
         ]
+
+        if self.context:
+            messages_context.append({'role': 'system', 'content': self.context})
 
         query = {
             'model': self.model_name,
@@ -145,10 +153,12 @@ class AskerAbstract(ABC):
 
     def __init__(self, *,
             conversation : Conversation,
-            client_wrapper) -> None: # add in a type
+            client_wrapper,
+            context:Optional[str]=None) -> None: # add in a type
 
         self.conversation = conversation
         self.client_wrapper = client_wrapper
+        self.context = context
 
         # If self.thread is None, then we are NOT tyring a reply from the AI
         self.thread: Optional[QueryThread] = None
@@ -169,7 +179,8 @@ class AskerAbstract(ABC):
         self.thread = QueryThread(
             self.conversation.messages,
             self.client_wrapper.client,
-            model_name
+            model_name,
+            self.context
         )
 
 
@@ -183,6 +194,6 @@ class AskerAbstract(ABC):
 
 def create_client(url):
     try:
-        return ollama.Client(url)
+        return ollama.Client(host=url, timeout=3)
     except Exception:
         return None

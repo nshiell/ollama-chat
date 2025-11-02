@@ -53,6 +53,9 @@ class QApplicationOllamaChat(QApplication):
     def setup_model_client(self, url:str):
         self.client = create_client(url)
         self.models = ModelNames(self.client)
+        for conversation in self.conversations:
+            if conversation.window:
+                conversation.window.models = self.models
 
 
     def show_conversation_windows(self) -> None:
@@ -67,7 +70,7 @@ class QApplicationOllamaChat(QApplication):
 
     def add_window_to_conversation(self, conversation:Conversation) -> None:
         win = MainWindow(
-            defaultSettings=self.state.settings,
+            settings=self.state,
             conversation=conversation,
             models=self.models
         )

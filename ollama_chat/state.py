@@ -153,7 +153,7 @@ class State:
 
     def save(self):
         self.storage.save_all_conversations(self.conversations)
-
+        self.storage.config = self.settings
 
     def __getitem__(self, key):
         return self.settings[key]

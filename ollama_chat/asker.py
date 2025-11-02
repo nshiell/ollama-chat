@@ -24,12 +24,14 @@ class Asker(AskerAbstract):
     def __init__(self, *,
             conversation   : Conversation,
             client_wrapper : client_wrapper,
+            context:Optional[str]=None,
             q_message      : QWidget,
             q_combo_models : QWidget) -> None:
 
         super().__init__(
             conversation=conversation,
-            client_wrapper=client_wrapper
+            client_wrapper=client_wrapper,
+            context=context
         )
 
         self.q_message = q_message
