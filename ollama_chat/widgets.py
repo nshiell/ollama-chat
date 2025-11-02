@@ -58,12 +58,12 @@ class MainWindow(QMainWindow, WindowMixin):
     """
 
     def __init__(self, *,
-            defaultSettings : Settings,
-            conversation    : Conversation,
-            models          : ModelNames) -> None:
+            settings     : Settings,
+            conversation : Conversation,
+            models       : ModelNames) -> None:
 
         self.conversation = conversation
-        self.settings = defaultSettings
+        self.settings = settings
 
         self.current_bubble_text = None
 
@@ -78,13 +78,10 @@ class MainWindow(QMainWindow, WindowMixin):
         self.ask = Asker(
             q_message=self.message,
             conversation=conversation,
+            context=settings['context'],
             client_wrapper=self.models,
             q_combo_models=self.combo_models
         )
-
-
-        # Don't call this on load
-        #self.settings_dialog = SettingsDialog(self.settings)
 
         self.message.setFocus()
         self.setup_bindings()
@@ -109,13 +106,13 @@ class MainWindow(QMainWindow, WindowMixin):
         self.current_bubble_text.setText(self.current_bubble_text.text() + word)
 
 
-    def create_thread(self):
-        self._query_thread = QueryThread(self.conversation.messages)
-        self._query_thread.word.connect(self.conversation.add_word)
+    #def create_thread(self):
+    #    self._query_thread = QueryThread(self.conversation.messages)
+    #    self._query_thread.word.connect(self.conversation.add_word)
 
-        def set_assistant_typing(value):
-            self.conversation.assistant_typing = value
-        self._query_thread.typing.connect(set_assistant_typing)
+    #    def set_assistant_typing(value):
+    #        self.conversation.assistant_typing = value
+    #    self._query_thread.typing.connect(set_assistant_typing)
 
 
     def setup_remove_template_widgets(self):
@@ -125,7 +122,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def setup_bindings(self):
         self.bind = Bindings(['new_window_request', 'settings_show_request'])
-        #self.settings.bind('changed', self.settings_change)
+
         # fixme!
         self.conversation.bind('add_word', self.word_add)
         self.conversation.bind(
@@ -170,21 +167,8 @@ Do you want to close the program?''',
 
 
     def settings_changed(self):
-        print(self.settings)
+        self.ask.context = self.settings['context']
         #todo fixme!
-        pass
-        # this needs changing!
-        #self.models.client = self.create_client(self.settings_dialog.line_edit_url)
-        #self.conversation.client = self.models.client
-        #self.models.reload()
-        #self.combo_models.redraw()
-
-
-    def create_client(self, url):
-        try:
-            return ollama.Client(url)
-        except Exception:
-            return None
 
 
     def assistant_typing_toggled(self, value):
@@ -278,19 +262,11 @@ class SettingsDialog(QDialog, WindowMixin):
         super().__init__()
         self.load_xml('settings.ui')
         self.settings = settings
-
-        self.models = ModelNames(self.create_client(self.settings['url']), True)
         self.setup_bindings()
 
 
-    def create_client(self, url):
-        try:
-            return ollama.Client(url)
-        except Exception:
-            return None
-
-
     def setup_data_state(self):
+        self.models = ModelNames(create_client(self.settings['url']), True)
         self.tabs.setCurrentIndex(0)
         self.swap_widget(self.combo_models, ComboBoxModels(self.models))
 
@@ -321,23 +297,48 @@ class SettingsDialog(QDialog, WindowMixin):
 
 
     def connect(self):
-        self.models.client = self.create_client(self.line_edit_url.text())
+        self.models.client = create_client(self.line_edit_url.text())
         self.models.reload()
         self.combo_models.redraw()
 
 
     def ok(self):
         new_url = self.line_edit_url.text()
-        if self.settings['url'] != new_url:
+        if self._check_values_changed(True):
             self.bind.trigger('client_change_request', new_url)
+
+        # Need to do this before overwriting values
+        values_changed = self._check_values_changed()
 
         self.settings['model_name'] = self.combo_models.currentText()
         self.settings['context'] = self.plain_text_context.toPlainText()
-        self.settings['url'] = new_url
+        self.settings['url'] = self.line_edit_url.text()
         self.settings['style'] = self.combo_styles.currentText()
         self.settings['font'] = self.combo_font.currentFont().family()
         self.settings['font_size'] = self.spin_box_font_size.value()
 
-        self.bind.trigger('settings_changed')
+        if values_changed:
+            self.bind.trigger('settings_changed')
 
         self.hide()
+
+
+    def _check_values_changed(self, url_only:bool=False) -> bool:
+        if self.settings['url'] != self.line_edit_url.text():
+            return True
+
+        if url_only:
+            return False
+
+        if self.settings['model_name'] != self.combo_models.currentText():
+            return True
+        if self.settings['context'] != self.plain_text_context.toPlainText():
+            return True
+        #if self.settings['style'] != self.combo_styles.currentText():
+        #    return True
+        if self.settings['font'] != self.combo_font.currentFont().family():
+            return True
+        if self.settings['font_size'] != self.spin_box_font_size.value():
+            return True
+
+        return False
