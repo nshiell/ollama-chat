@@ -106,15 +106,6 @@ class MainWindow(QMainWindow, WindowMixin):
         self.current_bubble_text.setText(self.current_bubble_text.text() + word)
 
 
-    #def create_thread(self):
-    #    self._query_thread = QueryThread(self.conversation.messages)
-    #    self._query_thread.word.connect(self.conversation.add_word)
-
-    #    def set_assistant_typing(value):
-    #        self.conversation.assistant_typing = value
-    #    self._query_thread.typing.connect(set_assistant_typing)
-
-
     def setup_remove_template_widgets(self):
         self.w['frame_assistant'].setParent(None)
         self.w['frame_user'].setParent(None)
