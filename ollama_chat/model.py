@@ -194,6 +194,6 @@ class AskerAbstract(ABC):
 
 def create_client(url):
     try:
-        return ollama.Client(host=url, timeout=3)
+        return ollama.Client(host=url, timeout=10)
     except Exception:
         return None
