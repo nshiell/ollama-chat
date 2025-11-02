@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>Ollama Chat</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -259,6 +259,7 @@ padding: 10px;
      <string>Chat</string>
     </property>
     <addaction name="action_new_window"/>
+    <addaction name="action_history"/>
     <addaction name="action_configure"/>
     <addaction name="separator"/>
     <addaction name="action_close_Window"/>
@@ -318,7 +319,8 @@ padding: 10px;
   </action>
   <action name="action_quit">
    <property name="icon">
-    <iconset theme="application-exit"/>
+    <iconset theme="application-exit">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>Quit</string>
@@ -329,13 +331,22 @@ padding: 10px;
   </action>
   <action name="action_close_Window">
    <property name="icon">
-    <iconset theme="window-close"/>
+    <iconset theme="window-close">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>Close Window</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+W</string>
+   </property>
+  </action>
+  <action name="action_history">
+   <property name="icon">
+    <iconset theme="edit-undo-history"/>
+   </property>
+   <property name="text">
+    <string>History</string>
    </property>
   </action>
  </widget>
